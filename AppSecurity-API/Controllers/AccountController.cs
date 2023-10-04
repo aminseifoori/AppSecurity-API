@@ -1,9 +1,11 @@
 ﻿using AppSecurity_API.Dtos;
 using AppSecurity_API.Entities;
+using AppSecurity_API.JwtFeatures;
 using AutoMapper;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using System.IdentityModel.Tokens.Jwt;
 
 namespace AppSecurity_API.Controllers
 {
@@ -13,11 +15,14 @@ namespace AppSecurity_API.Controllers
     {
         private readonly UserManager<User> userManager;
         private readonly IMapper mapper;
+        private readonly JwtHandler jwtHandler;
 
-        public AccountController(UserManager<User> _userManager, IMapper _mapper)
+        public AccountController(UserManager<User> _userManager, IMapper _mapper,
+            JwtHandler _jwtHandler)
         {
             userManager = _userManager;
             mapper = _mapper;
+            jwtHandler = _jwtHandler;
         }
 
         [HttpPost("Registration")]
@@ -35,6 +40,19 @@ namespace AppSecurity_API.Controllers
                 return BadRequest(new RegistrationResponseDto { Errors = errors });
             }
             return StatusCode(201);
+        }
+
+        [HttpPost("Login")]
+        public async Task<IActionResult> Login([FromBody] LoginDto login)
+        {
+            var user = await userManager.FindByNameAsync(login.Email);
+            if (user == null || !await userManager.CheckPasswordAsync(user, login.Password))
+                return Unauthorized(new AuthResponseDto { ErrorMessage = "Invalid Authentication" });
+            var signingCredentials = jwtHandler.GetSigningCredentials();
+            var claims = jwtHandler.GetClaims(user);
+            var tokenOptions = jwtHandler.GenerateTokenOptions(signingCredentials, claims);
+            var token = new JwtSecurityTokenHandler().WriteToken(tokenOptions);
+            return Ok(new AuthResponseDto { IsAuthSuccessful = true, Token = token });
         }
     }
 }
