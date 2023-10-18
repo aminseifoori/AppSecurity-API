@@ -2,6 +2,7 @@
 using AppSecurity_API.Entities;
 using AppSecurity_API.JwtFeatures;
 using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -39,6 +40,8 @@ namespace AppSecurity_API.Controllers
 
                 return BadRequest(new RegistrationResponseDto { Errors = errors });
             }
+
+            await userManager.AddToRoleAsync(user, "User");
             return StatusCode(201);
         }
 
@@ -49,10 +52,20 @@ namespace AppSecurity_API.Controllers
             if (user == null || !await userManager.CheckPasswordAsync(user, login.Password))
                 return Unauthorized(new AuthResponseDto { ErrorMessage = "Invalid Authentication" });
             var signingCredentials = jwtHandler.GetSigningCredentials();
-            var claims = jwtHandler.GetClaims(user);
+            var claims = await jwtHandler.GetClaims(user);
             var tokenOptions = jwtHandler.GenerateTokenOptions(signingCredentials, claims);
             var token = new JwtSecurityTokenHandler().WriteToken(tokenOptions);
             return Ok(new AuthResponseDto { IsAuthSuccessful = true, Token = token });
+        }
+
+        [HttpGet("AdminData")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> AdminData()
+        {
+            var claims = User.Claims
+                .Select(c => new { c.Type, c.Value })
+                .ToList();
+            return Ok(claims);
         }
     }
 }

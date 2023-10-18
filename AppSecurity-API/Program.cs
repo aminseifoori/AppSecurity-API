@@ -2,9 +2,11 @@
 using AppSecurity_API.Entities;
 using AppSecurity_API.JwtFeatures;
 using AppSecurity_API.Repository;
+using AppSecurity_API.Settings;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
@@ -35,8 +37,14 @@ namespace AppSecurity_API
 
                 });
             });
+            builder.Services.AddIdentity<User, IdentityRole>(option =>
+            {
+                option.Password.RequiredLength = 6;
+            }).AddEntityFrameworkStores<RepositoryContext>()
+            .AddDefaultTokenProviders();
 
-            var jwtSettings = builder.Configuration.GetSection("JwtSettings");
+
+            var jwtSettings = builder.Configuration.GetSection(nameof(JwtSettings)).Get<JwtSettings>();
             builder.Services.AddAuthentication(opt =>
             {
                 opt.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -49,10 +57,10 @@ namespace AppSecurity_API
                     ValidateAudience = true,
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
-                    ValidIssuer = jwtSettings["validIssuer"],
-                    ValidAudience = jwtSettings["validAudience"],
+                    ValidIssuer = jwtSettings.ValidIssuer,
+                    ValidAudience = jwtSettings.ValidAudience,
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8
-                        .GetBytes(jwtSettings.GetSection("JwtSecters").Value))
+                        .GetBytes(jwtSettings.JwtSecters))
                 };
             });
 
@@ -62,12 +70,6 @@ namespace AppSecurity_API
             {
                 option.UseSqlServer(congiguration.GetConnectionString("default"));
             });
-
-            builder.Services.AddIdentity<User, IdentityRole>(option =>
-            {
-                option.Password.RequiredLength = 6;
-            }).AddEntityFrameworkStores<RepositoryContext>()
-            .AddDefaultTokenProviders();
 
             builder.Services.AddAutoMapper(typeof(Program));
 
