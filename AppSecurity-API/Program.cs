@@ -3,6 +3,9 @@ using AppSecurity_API.Entities;
 using AppSecurity_API.JwtFeatures;
 using AppSecurity_API.Repository;
 using AppSecurity_API.Settings;
+using EmailService.Interface;
+using EmailService.Service;
+using EmailServiceAPI.Settings;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -27,6 +30,8 @@ namespace AppSecurity_API
                 .AddJsonFile($"appsettings.{env}.json", true, true);
 
             // Add services to the container.
+
+            //Add CORS Setting
             builder.Services.AddCors(option =>
             {
                 option.AddPolicy("EnableCORS", builder =>
@@ -37,13 +42,18 @@ namespace AppSecurity_API
 
                 });
             });
+            //Add Identity
             builder.Services.AddIdentity<User, IdentityRole>(option =>
             {
                 option.Password.RequiredLength = 6;
             }).AddEntityFrameworkStores<RepositoryContext>()
             .AddDefaultTokenProviders();
 
+            //Add Token Life Span (Reset Password)
+            builder.Services.Configure<DataProtectionTokenProviderOptions>(opt =>
+                opt.TokenLifespan = TimeSpan.FromHours(2));
 
+            //Read JWT Setting and add Authentication
             var jwtSettings = builder.Configuration.GetSection(nameof(JwtSettings)).Get<JwtSettings>();
             builder.Services.AddAuthentication(opt =>
             {
@@ -64,13 +74,25 @@ namespace AppSecurity_API
                 };
             });
 
+            //Add JWT Handler (JWT Generator)
             builder.Services.AddScoped<JwtHandler>();
 
+            //Add DBContext - SQL Server
             builder.Services.AddDbContext<RepositoryContext>(option =>
             {
                 option.UseSqlServer(congiguration.GetConnectionString("default"));
             });
 
+            //Email Sender Configuration
+            var emailConfig = builder.Configuration
+                .GetSection("EmailConfiguration")
+                .Get<EmailConfiguration>();
+            builder.Services.AddSingleton(emailConfig);
+
+            //Add Email Service (We use local Nuget Package)
+            builder.Services.AddScoped<IEmailSender, EmailSender>();
+
+            //Add AutoMapper
             builder.Services.AddAutoMapper(typeof(Program));
 
             builder.Services.AddControllers();
@@ -87,6 +109,7 @@ namespace AppSecurity_API
                 app.UseSwaggerUI();
             }
 
+            //Enable CORS - Middleware
             app.UseCors("EnableCORS");
 
             app.UseHttpsRedirection();
