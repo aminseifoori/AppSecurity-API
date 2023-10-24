@@ -46,6 +46,12 @@ namespace AppSecurity_API
             builder.Services.AddIdentity<User, IdentityRole>(option =>
             {
                 option.Password.RequiredLength = 6;
+
+                option.User.RequireUniqueEmail = true;
+  
+                option.Lockout.AllowedForNewUsers = true;
+                option.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(2);
+                option.Lockout.MaxFailedAccessAttempts = 3;
             }).AddEntityFrameworkStores<RepositoryContext>()
             .AddDefaultTokenProviders();
 
