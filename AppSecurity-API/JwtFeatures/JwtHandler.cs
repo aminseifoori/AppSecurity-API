@@ -49,5 +49,13 @@ namespace AppSecurity_API.JwtFeatures
                 signingCredentials: signingCredentials);
             return tokenOptions;
         }
+        public async Task<string> GenerateToken(User user)
+        {
+            var signingCredentials = GetSigningCredentials();
+            var claims = await GetClaims(user);
+            var tokenOptions = GenerateTokenOptions(signingCredentials, claims);
+            var token = new JwtSecurityTokenHandler().WriteToken(tokenOptions);
+            return token;
+        }
     }
 }

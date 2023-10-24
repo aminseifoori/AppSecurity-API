@@ -61,6 +61,7 @@ namespace AppSecurity_API.Controllers
             await emailSender.SendEmailAsync(message);
 
             await userManager.AddToRoleAsync(user, "User");
+            await userManager.SetTwoFactorEnabledAsync(user, true);
             return StatusCode(201);
         }
 
@@ -72,23 +73,24 @@ namespace AppSecurity_API.Controllers
                 return BadRequest("Invalid Request");
             if (!await userManager.IsEmailConfirmedAsync(user))
                 return Unauthorized(new AuthResponseDto { ErrorMessage = "Email is not confirmed" });
-            var test = await userManager.IsLockedOutAsync(user);
             //To active Lockout we need to use PasswordSignInAsync
             //if (!await userManager.CheckPasswordAsync(user, login.Password))
             //    return Unauthorized(new AuthResponseDto { ErrorMessage = "Invalid Authentication" });
             var result = await signInManager.PasswordSignInAsync(login.Email, login.Password, false, true);
             if (result.IsLockedOut)
                 return Unauthorized(new AuthResponseDto { ErrorMessage = "The account is locked out" });
-            if (!result.Succeeded)
+
+            if (!result.Succeeded && !await userManager.GetTwoFactorEnabledAsync(user))
                 return Unauthorized(new AuthResponseDto { ErrorMessage = "Invalid Authentication" });
 
-            var signingCredentials = jwtHandler.GetSigningCredentials();
-            var claims = await jwtHandler.GetClaims(user);
-            var tokenOptions = jwtHandler.GenerateTokenOptions(signingCredentials, claims);
-            var token = new JwtSecurityTokenHandler().WriteToken(tokenOptions);
-            //To reset failed count number after successfully signin
-            await userManager.ResetAccessFailedCountAsync(user); 
+            if (await userManager.GetTwoFactorEnabledAsync(user))
+                return await GenerateOTPFor2StepVerification(user);
+
+            var token = await jwtHandler.GenerateToken(user);
+            //To reset failed login counter after successfully signin
+            await userManager.ResetAccessFailedCountAsync(user);
             return Ok(new AuthResponseDto { IsAuthSuccessful = true, Token = token });
+
         }
 
         [HttpGet("AdminData")]
@@ -124,7 +126,8 @@ namespace AppSecurity_API.Controllers
                 await emailSender.SendEmailAsync(message);
 
                 return Ok();
-            }catch (Exception ex)
+            }
+            catch (Exception ex)
             {
                 Console.WriteLine(ex.ToString());
                 return BadRequest(ex.ToString());
@@ -146,7 +149,7 @@ namespace AppSecurity_API.Controllers
                 var errors = resetPassResult.Errors.Select(e => e.Description);
                 return BadRequest(new { Errors = errors });
             }
-            if(await userManager.IsLockedOutAsync(user))
+            if (await userManager.IsLockedOutAsync(user))
             {
                 await userManager.SetLockoutEndDateAsync(user, new DateTime(2000, 1, 1));
             }
@@ -163,6 +166,36 @@ namespace AppSecurity_API.Controllers
             if (!confirmResult.Succeeded)
                 return BadRequest("Invalid Email Confirmation Request");
             return Ok();
+        }
+
+        [HttpPost("TwoStepVerification")]
+        public async Task<IActionResult> TwoStepVerification([FromBody] TwoFactorDto twoFactorDto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest();
+            var user = await userManager.FindByEmailAsync(twoFactorDto.Email);
+            if (user is null)
+                return BadRequest("Invalid Request");
+            var validVerification = await userManager.VerifyTwoFactorTokenAsync(user, twoFactorDto.Provider, twoFactorDto.Token);
+            if (!validVerification)
+                return BadRequest("Invalid Token Verification");
+            var token = await jwtHandler.GenerateToken(user);
+            return Ok(new AuthResponseDto { IsAuthSuccessful = true, Token = token });
+        }
+
+        private async Task<IActionResult> GenerateOTPFor2StepVerification(User user)
+        {
+            var providers = await userManager.GetValidTwoFactorProvidersAsync(user);
+            if (!providers.Contains("Email"))
+            {
+                return Unauthorized(new AuthResponseDto { ErrorMessage = "Invalid 2-Step Verification Provider." });
+            }
+            var token = await userManager.GenerateTwoFactorTokenAsync(user, "Email");
+            List<EmailAddress> address = new List<EmailAddress>();
+            address.Add(new EmailAddress { Address = user.Email, DisplayName = user.Email });
+            var message = new Message(address, "Authentication token", token, null);
+            await emailSender.SendEmailAsync(message);
+            return Ok(new AuthResponseDto { Is2StepVerificationRequired = true, Provider = "Email" });
         }
     }
 }
