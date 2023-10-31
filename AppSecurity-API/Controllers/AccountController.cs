@@ -182,6 +182,44 @@ namespace AppSecurity_API.Controllers
             var token = await jwtHandler.GenerateToken(user);
             return Ok(new AuthResponseDto { IsAuthSuccessful = true, Token = token });
         }
+        [HttpPost("ExternalLogin")]
+        public async Task<IActionResult> ExternalLogin([FromBody] ExternalAuthDto externalAuth)
+        {
+            var payload = await jwtHandler.VerifyGoogleToken(externalAuth);
+            if (payload == null)
+                return BadRequest("Invalid External Authentication.");
+
+            var info = new UserLoginInfo(externalAuth.Provider, payload.Subject, externalAuth.Provider);
+
+            var user = await userManager.FindByLoginAsync(info.LoginProvider, info.ProviderKey);
+            if (user == null)
+            {
+                user = await userManager.FindByEmailAsync(payload.Email);
+
+                if (user == null)
+                {
+                    user = new User { Email = payload.Email, UserName = payload.Email };
+                    await userManager.CreateAsync(user);
+
+                    //prepare and send an email for the email confirmation
+
+                    await userManager.AddToRoleAsync(user, "User");
+                    await userManager.AddLoginAsync(user, info);
+                }
+                else
+                {
+                    await userManager.AddLoginAsync(user, info);
+                }
+            }
+
+            if (user == null)
+                return BadRequest("Invalid External Authentication.");
+
+            //check for the Locked out account
+
+            var token = await jwtHandler.GenerateToken(user);
+            return Ok(new AuthResponseDto { Token = token, IsAuthSuccessful = true });
+        }
 
         private async Task<IActionResult> GenerateOTPFor2StepVerification(User user)
         {

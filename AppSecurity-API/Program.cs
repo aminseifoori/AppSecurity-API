@@ -61,6 +61,7 @@ namespace AppSecurity_API
 
             //Read JWT Setting and add Authentication
             var jwtSettings = builder.Configuration.GetSection(nameof(JwtSettings)).Get<JwtSettings>();
+
             builder.Services.AddAuthentication(opt =>
             {
                 opt.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
