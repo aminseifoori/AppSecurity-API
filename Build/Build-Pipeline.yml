@@ -38,5 +38,3 @@ jobs:
     condition: succeededOrFailed()
     inputs:
       PathtoPublish: $(build.artifactstagingdirectory)
-      TargetPath: '\\my\share\$(Build.DefinitionName)\$(Build.BuildNumber)'
-...
