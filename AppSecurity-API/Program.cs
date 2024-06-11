@@ -112,12 +112,12 @@ namespace AppSecurity_API
             // Configure the HTTP request pipeline.
             if (app.Environment.IsDevelopment() || env == "Local")
             {
-                app.UseSwagger();
-                app.UseSwaggerUI();
+                //Enable CORS - Middleware
+                app.UseCors("EnableCORS");
             }
+            app.UseSwagger();
+            app.UseSwaggerUI();
 
-            //Enable CORS - Middleware
-            app.UseCors("EnableCORS");
 
             app.UseHttpsRedirection();
 
@@ -126,6 +126,13 @@ namespace AppSecurity_API
 
 
             app.MapControllers();
+
+            // Redirect root URL to Swagger
+            app.MapGet("/", context =>
+            {
+                context.Response.Redirect("/swagger");
+                return Task.CompletedTask;
+            });
 
             app.Run();
         }
